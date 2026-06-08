@@ -34,6 +34,21 @@ def _wide(records):
     return {k: np.array(v) for k, v in cols.items()}
 
 
+def _within_patient_corr(records, a_name, b_name):
+    """Within-patient correlation: demean each instrument per patient, then pool residuals.
+    This is the quantity bounded by the §3 ICC measurement-noise floor
+    (ceiling = sqrt(ICC_a * ICC_b)); the pooled cross-sectional correlation is inflated by
+    between-state and flare variance and is NOT comparable to that ceiling."""
+    ra, rb = [], []
+    for rec in records:
+        a = np.array([{o.instrument: o.score for o in w.observations}[a_name] for w in rec.waves])
+        b = np.array([{o.instrument: o.score for o in w.observations}[b_name] for w in rec.waves])
+        if len(a) > 1:
+            ra += list(a - a.mean())
+            rb += list(b - b.mean())
+    return round(float(np.corrcoef(ra, rb)[0, 1]), 3)
+
+
 def _retest(records, answers):
     """Stable-window test-retest proxy: Pearson r between consecutive waves where BOTH
     waves are ground-truth stable (no true flare, no comorbidity elevation)."""
@@ -82,12 +97,37 @@ def main(argv: list[str] | None = None) -> int:
                    "n_comorbid_patients": len(comorbid_pts),
                    "comorbid_fraction": round(len(comorbid_pts) / args.n, 3)},
         "inter_pro_correlation": {
-            "pain_vs_pga": r("PainVAS", "PatientGlobalVAS"),
-            "pga_vs_haq": r("PatientGlobalVAS", "HAQ-II"),
-            "pain_vs_haq": r("PainVAS", "HAQ-II"),
-            "targets": {"pain_vs_pga": 0.70, "pga_vs_haq": 0.64},
+            "note": (
+                "pooled_cross_sectional pools all patient-waves (across disease states and "
+                "flares) and is the quantity comparable to cross-sectional literature "
+                "associations; within_patient demeans per patient and is bounded by the ICC "
+                "ceiling sqrt(ICC_a*ICC_b). These are different quantities - do not compare a "
+                "pooled value against the within-patient ICC ceiling."
+            ),
+            "pooled_cross_sectional": {
+                "pain_vs_pga": r("PainVAS", "PatientGlobalVAS"),
+                "pga_vs_haq": r("PatientGlobalVAS", "HAQ-II"),
+                "pain_vs_haq": r("PainVAS", "HAQ-II"),
+            },
+            "within_patient": {
+                "pain_vs_pga": _within_patient_corr(records, "PainVAS", "PatientGlobalVAS"),
+                "pga_vs_haq": _within_patient_corr(records, "PatientGlobalVAS", "HAQ-II"),
+                "pain_vs_haq": _within_patient_corr(records, "PainVAS", "HAQ-II"),
+            },
+            "within_patient_icc_ceiling": {
+                "pain_vs_pga": round(float(np.sqrt(0.742 * 0.702)), 3),
+                "pga_vs_haq": round(float(np.sqrt(0.702 * 0.90)), 3),
+            },
+            "design_targets": {"pain_vs_pga": 0.70, "pga_vs_haq": 0.64},
         },
         "test_retest_proxy": _retest(records, answers),
+        "test_retest_note": (
+            "Lower bound, not a formal ICC. CAVEAT: RAPID3's FN subscore is currently derived "
+            "from the noise-free function state, so RAPID3 retest is mildly optimistic "
+            "(~0.014 higher than if FN carried HAQ-level observed noise). The published "
+            "reliability ordering claim concerns HAQ-II > Pain > PGA only; no RAPID3 "
+            "reliability claim is made."
+        ),
         "flare_gap": {
             "n_true_flares": len(true_flares),
             "n_axiom_invisible": len(invisible),
