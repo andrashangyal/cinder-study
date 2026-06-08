@@ -2,9 +2,10 @@
 
 Takes the standardized structural trajectory from `latent.py`, maps each channel to native
 instrument units via the §2 state-conditioned mean/SD, imposes the §3 ICC measurement-noise
-floor, clips to valid ranges, and rounds to the C8 precision. RAPID3 is COMPUTED here from
-FN (the function latent, co-moving with HAQ-II) + PN (pain) + PtGA (global) - never drawn
-independently (§4 construct rule; R2 closed).
+floor, clips to valid ranges, and rounds to the C8 precision. RAPID3 is COMPUTED here from the
+three OBSERVED scores: FN (observed HAQ-II) + PN (observed pain) + PtGA (observed global) -
+never drawn independently (§4 construct rule; R2 closed). Every component carries measurement
+noise, so RAPID3 has no noise-free component.
 
 Per-instrument measurement noise is scaled to the patient's state true-SD so the emergent
 test-retest ICC matches §3 regardless of disease-activity mixture:
@@ -71,15 +72,17 @@ def noise_sd_for_icc(true_sd: float, icc: float) -> float:
     return float(true_sd) * float(np.sqrt((1.0 - icc) / icc))
 
 
-def _fn_from_function_state(true_haq: np.ndarray) -> np.ndarray:
-    """RAPID3 FN (0-10), a calibrated monotone function of the same function state as HAQ-II.
+def _fn_from_observed_haq(haq_obs: np.ndarray) -> np.ndarray:
+    """RAPID3 FN (0-10), a calibrated monotone function of the OBSERVED HAQ-II.
 
-    HAQ-II is 0-3; FN is 0-10. We scale HAQ-II by 10/3 so FN co-moves with HAQ-II by
-    construction and the population lands in the correct Pincus bands. This is documented as
-    a calibrated synthetic proxy (cite Pincus 2008 for structure), NOT the exact MDHAQ
-    transform (R2).
+    HAQ-II is 0-3; FN is 0-10. We scale the observed (measurement-noised) HAQ-II by 10/3 so FN
+    co-moves with HAQ-II AND carries the same measurement noise as the other RAPID3 components
+    (PN from observed Pain, PtGA from observed PGA). RAPID3 is therefore a pure function of the
+    three observed instrument scores, as in the real MDHAQ-derived composite - no component is
+    noise-free by construction. Calibrated synthetic proxy (cite Pincus 2008 for structure),
+    NOT the exact MDHAQ transform (R2).
     """
-    return np.clip(true_haq * (10.0 / 3.0), 0.0, 10.0)
+    return np.clip(haq_obs * (10.0 / 3.0), 0.0, 10.0)
 
 
 def map_to_instruments(
@@ -110,8 +113,8 @@ def map_to_instruments(
     pain_r = np.round(pain_obs, 0)
     pga_r = np.round(pga_obs, 0)
 
-    # --- RAPID3 computed (never drawn): FN(function state) + PN(pain) + PtGA(global). ---
-    fn = np.round(_fn_from_function_state(true_haq), 1)
+    # --- RAPID3 computed (never drawn) from the three OBSERVED scores: FN(HAQ)+PN(pain)+PtGA(global).
+    fn = np.round(_fn_from_observed_haq(haq_r), 1)
     pn = np.round(np.clip(pain_r / 10.0, 0.0, 10.0), 1)
     ptga = np.round(np.clip(pga_r / 10.0, 0.0, 10.0), 1)
     rapid3 = np.round(fn + pn + ptga, 1)

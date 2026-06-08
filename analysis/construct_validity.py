@@ -122,11 +122,11 @@ def main(argv: list[str] | None = None) -> int:
         },
         "test_retest_proxy": _retest(records, answers),
         "test_retest_note": (
-            "Lower bound, not a formal ICC. CAVEAT: RAPID3's FN subscore is currently derived "
-            "from the noise-free function state, so RAPID3 retest is mildly optimistic "
-            "(~0.014 higher than if FN carried HAQ-level observed noise). The published "
-            "reliability ordering claim concerns HAQ-II > Pain > PGA only; no RAPID3 "
-            "reliability claim is made."
+            "Lower bound, not a formal ICC. RAPID3 is computed from the three OBSERVED scores "
+            "(FN from observed HAQ-II, PN from observed Pain, PtGA from observed PGA), so every "
+            "component carries measurement noise - no component is noise-free by construction. "
+            "The published reliability ordering claim concerns HAQ-II > Pain > PGA only; no "
+            "RAPID3 reliability claim is made."
         ),
         "flare_gap": {
             "n_true_flares": len(true_flares),
